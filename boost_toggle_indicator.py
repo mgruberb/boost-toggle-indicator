@@ -21,6 +21,7 @@
 
 import gi
 import subprocess
+import os
 from pathlib import Path
 
 gi.require_version("Gtk", "3.0")
@@ -29,17 +30,23 @@ from gi.repository import Gtk, GLib, AyatanaAppIndicator3 as AppIndicator3
 
 BOOST_FILE = Path("/sys/devices/system/cpu/cpufreq/boost")
 
+
 if not BOOST_FILE.exists():
     print("Boost control not available on this CPU.")
     sys.exit(1)
 
 config_dir = Path.home() / ".config" / "boost-toggle"
 config_dir.mkdir(parents=True, exist_ok=True)
+
+CUSTOM_ON_ICON_PATH = "icons/boost-on.svg"
+CUSTOM_OFF_ICON_PATH = "icons/boost-off.svg"
+FALLBACK_ICON_NAME = "cpu"
+
 STATE_FILE = config_dir / "state"
 
 class BoostToggleApp(Gtk.Application):
     def __init__(self):
-        super().__init__(application_id="dev.tkb.BoostToggle")
+        super().__init__(application_id="dev.mgruberb.BoostToggle")
         self.window = None
         self.indicator = None
 
@@ -47,9 +54,10 @@ class BoostToggleApp(Gtk.Application):
         Gtk.Application.do_startup(self)
 
         # create Ayatana appindicator (tray icon)
+        state = self.load_saved_state()
         self.indicator = AppIndicator3.Indicator.new(
             "boost-toggle-indicator",
-            "indicator-cpufreq-100" if self.load_saved_state() else "indicator-cpufreq-50",
+            str(self.get_icon(state)),
             AppIndicator3.IndicatorCategory.SYSTEM_SERVICES
         )
         self.indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
@@ -69,13 +77,21 @@ class BoostToggleApp(Gtk.Application):
         menu.show_all()
         self.indicator.set_menu(menu)
 
-
+    def get_icon(self, state):
+        suffix = CUSTOM_ON_ICON_PATH if state else CUSTOM_OFF_ICON_PATH
+        for test_path in [Path.cwd() / suffix, Path.home() / ".local" / "share" / "boost-toggle" / suffix, Path("/usr/share/boost-toggle") / suffix]:
+            if os.path.exists(test_path):
+                #print(f"Found path: {test_path}") 
+                return str(test_path)  # use local dir absolute path
+            #else:
+            	#print(f"Could not find path: {test_path}") 
+        return FALLBACK_ICON_NAME
 
     def update_icon(self):
-        if self.get_boost_status():
-            self.indicator.set_icon_full("indicator-cpufreq-100", "CPU boost enabled")  # or your "boost on" icon
-        else:
-            self.indicator.set_icon_full("indicator-cpufreq-50", "CPU boost disabled")  # or your "boost off" icon
+        state = self.get_boost_status()
+        icon = self.get_icon(state)
+        description = "CPU boost " + "enabled" if state else "disabled"
+        self.indicator.set_icon_full(icon, description)
 
     def do_activate(self):
         if not self.window:
