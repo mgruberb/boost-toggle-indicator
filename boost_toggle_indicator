@@ -30,11 +30,6 @@ from gi.repository import Gtk, GLib, AyatanaAppIndicator3 as AppIndicator3
 
 BOOST_FILE = Path("/sys/devices/system/cpu/cpufreq/boost")
 
-
-if not BOOST_FILE.exists():
-    print("Boost control not available on this CPU.")
-    sys.exit(1)
-
 config_dir = Path.home() / ".config" / "boost-toggle"
 config_dir.mkdir(parents=True, exist_ok=True)
 
@@ -43,6 +38,8 @@ CUSTOM_OFF_ICON_PATH = "icons/boost-off.svg"
 FALLBACK_ICON_NAME = "cpu"
 
 STATE_FILE = config_dir / "state"
+boosting_supported = BOOST_FILE.exists()
+
 
 class BoostToggleApp(Gtk.Application):
     def __init__(self):
@@ -53,42 +50,48 @@ class BoostToggleApp(Gtk.Application):
     def do_startup(self):
         Gtk.Application.do_startup(self)
 
-        # create Ayatana appindicator (tray icon)
-        state = self.load_saved_state()
-        self.indicator = AppIndicator3.Indicator.new(
-            "boost-toggle-indicator",
-            str(self.get_icon(state)),
-            AppIndicator3.IndicatorCategory.SYSTEM_SERVICES
-        )
-        self.indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
+        # tray icon only active if boosting is supported
+        if boosting_supported:
+            # try to load last state
+            state = self.load_saved_state()
+            
+            # create Ayatana appindicator (tray icon)
+            self.indicator = AppIndicator3.Indicator.new(
+                 "boost-toggle-indicator",
+                 str(self.get_icon(state)),
+                 AppIndicator3.IndicatorCategory.SYSTEM_SERVICES
+            )
+        
+            self.indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
 
-        # create the menu
-        menu = Gtk.Menu()
+            # create the menu
+            menu = Gtk.Menu()
 
-        self.toggle_item = Gtk.CheckMenuItem(label="Enable CPU Boost")
-        self.toggle_item.set_active(self.get_boost_status())
-        self.toggle_item.connect("toggled", self.on_toggle)
-        menu.append(self.toggle_item)
+            self.toggle_item = Gtk.CheckMenuItem(label="Enable CPU Boost")
+            self.toggle_item.set_active(state)
+            self.toggle_item.connect("toggled", self.on_toggle)
+            menu.append(self.toggle_item)
 
-        quit_item = Gtk.MenuItem(label="Quit")
-        quit_item.connect("activate", lambda _: self.quit())
-        menu.append(quit_item)
+            quit_item = Gtk.MenuItem(label="Quit")
+            quit_item.connect("activate", lambda _: self.quit())
+            menu.append(quit_item)
+            
+            # if last state is not current state, change to the saved state
+            if state != self.get_boost_status():
+                self.set_boost(state)
+            menu.show_all()
+            self.indicator.set_menu(menu)
 
-        menu.show_all()
-        self.indicator.set_menu(menu)
 
     def get_icon(self, state):
         suffix = CUSTOM_ON_ICON_PATH if state else CUSTOM_OFF_ICON_PATH
+        # look for icons in increasingly wider scope
         for test_path in [Path.cwd() / suffix, Path.home() / ".local" / "share" / "boost-toggle" / suffix, Path("/usr/share/boost-toggle") / suffix]:
             if os.path.exists(test_path):
-                #print(f"Found path: {test_path}") 
-                return str(test_path)  # use local dir absolute path
-            #else:
-            	#print(f"Could not find path: {test_path}") 
+                return str(test_path)
         return FALLBACK_ICON_NAME
 
-    def update_icon(self):
-        state = self.get_boost_status()
+    def update_icon(self, state):
         icon = self.get_icon(state)
         description = "CPU boost " + "enabled" if state else "disabled"
         self.indicator.set_icon_full(icon, description)
@@ -97,15 +100,19 @@ class BoostToggleApp(Gtk.Application):
         if not self.window:
             self.window = Gtk.ApplicationWindow(application=self)
             self.window.set_title("CPU Boost Toggle")
-            self.window.set_default_size(200, 100)
+            self.window.set_default_size(300, 200)
 
-            label = Gtk.Label(label="CPU Boost Toggle running in tray.\nUse the tray icon to toggle.")
+            window_label = "Your CPU does not support the boost toggle:\n /sys/devices/system/cpu/cpufreq/boost not found \n\n Close this window to quit. \n Sorry :("
+            if boosting_supported:
+                "This is a dummy window and should not be visible."
+            label = Gtk.Label(label=window_label)
             label.set_justify(Gtk.Justification.CENTER)
 
             self.window.add(label)
-            #self.window.show_all()  # disable window presentation - no app window necessary
-        #self.window.present()       # disable window presentation - no app window necessary 
-        pass
+            if not boosting_supported:
+                print("Boost control not available on this CPU, exiting.")
+                self.window.show_all()
+                self.window.present()
 
     def get_boost_status(self):
         try:
@@ -120,7 +127,8 @@ class BoostToggleApp(Gtk.Application):
             subprocess.run(
                 ["pkexec", "tee", str(BOOST_FILE)],
                 input=value.encode(),
-                check=True
+                check=True,
+                stdout=subprocess.DEVNULL
             )
         except Exception as e:
             print(f"Failed to set boost: {e}")
@@ -128,7 +136,7 @@ class BoostToggleApp(Gtk.Application):
     def on_toggle(self, menu_item):
         state = menu_item.get_active()        
         self.set_boost(state)
-        self.update_icon()
+        self.update_icon(state)
         self.save_state(state)
     
     def load_saved_state(self):
