@@ -42,10 +42,10 @@ Boost Toggle Indicator will save the current state in the `.config/boost-toggle`
 If you want the program to run automatically at startup and restore your previous boost status, the following steps are required:
 
 Copy `boost-toggle-indicator` to `/usr/local/bin` and make it executable:
-	```bash
-	sudo cp boost-toggle-indicator /usr/local/bin/
-	sudo chmod +x /usr/local/bin/boost-toggle-indicator
-	```
+```bash
+sudo cp boost-toggle-indicator /usr/local/bin/
+sudo chmod +x /usr/local/bin/boost-toggle-indicator
+```
 
 Copy `boost-toggle-indicator.desktop` to your `.config/autostart` directory
 ```bash

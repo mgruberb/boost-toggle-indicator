@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=Boost Toggle Indicator
-Comment=Toggle AMD CPU Boost
+Comment=Toggle CPU Boost
 Exec=python3 /usr/local/bin/boost_toggle_indicator
 Icon=cpu
 Terminal=false
