@@ -29,6 +29,8 @@ sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 \
                  policykit-1
 ```                 
 
+**Note:** depending on your CPU (e.g. Zen 4/5), a relatively recent Kernel version (6.11+) may be required for the boost feature to be available.
+
 ## How to use
 
 You can run the Python script `boost_toggle_indicator` directly from the directory you extracted it to. 
