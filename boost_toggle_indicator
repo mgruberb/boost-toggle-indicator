@@ -28,7 +28,8 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("AyatanaAppIndicator3", "0.1")
 from gi.repository import Gtk, GLib, AyatanaAppIndicator3 as AppIndicator3
 
-BOOST_FILE = Path("/sys/devices/system/cpu/cpufreq/boost")
+BOOST_FILE_AMD = Path("/sys/devices/system/cpu/cpufreq/boost")
+BOOST_FILE_INTEL = Path("/sys/devices/system/cpu/intel_pstate/no_turbo")
 
 config_dir = Path.home() / ".config" / "boost-toggle"
 config_dir.mkdir(parents=True, exist_ok=True)
@@ -38,7 +39,9 @@ CUSTOM_OFF_ICON_PATH = "icons/boost-off.svg"
 FALLBACK_ICON_NAME = "cpu"
 
 STATE_FILE = config_dir / "state"
-boosting_supported = BOOST_FILE.exists()
+AMD_BOOSTING_SUPPORTED = BOOST_FILE_AMD.exists()
+INTEL_BOOSTING_SUPPORTED = BOOST_FILE_INTEL.exists()
+boosting_supported = (AMD_BOOSTING_SUPPORTED and not INTEL_BOOSTING_SUPPORTED) or (INTEL_BOOSTING_SUPPORTED and not AMD_BOOSTING_SUPPORTED)
 
 
 class BoostToggleApp(Gtk.Application):
@@ -93,7 +96,7 @@ class BoostToggleApp(Gtk.Application):
 
     def update_icon(self, state):
         icon = self.get_icon(state)
-        description = "CPU boost " + "enabled" if state else "disabled"
+        description = "CPU boost enabled" if state else "CPU boost disabled"
         self.indicator.set_icon_full(icon, description)
 
     def do_activate(self):
@@ -102,7 +105,7 @@ class BoostToggleApp(Gtk.Application):
             self.window.set_title("CPU Boost Toggle")
             self.window.set_default_size(300, 200)
 
-            window_label = "Your CPU does not support the boost toggle:\n /sys/devices/system/cpu/cpufreq/boost not found \n\n Close this window to quit. \n Sorry :("
+            window_label = "Your CPU or Kernel version does not support the boost toggle:\n/sys/devices/system/cpu/cpufreq/boost (AMD) or \n/sys/devices/system/cpu/intel_pstate/no_turbo (intel) not found \n (or found both) \n\n Close this window to quit. \n Sorry :("
             if boosting_supported:
                 "This is a dummy window and should not be visible."
             label = Gtk.Label(label=window_label)
@@ -110,22 +113,33 @@ class BoostToggleApp(Gtk.Application):
 
             self.window.add(label)
             if not boosting_supported:
-                print("Boost control not available on this CPU, exiting.")
+                print("Boost control not usable on this CPU/Kernel, exiting.")
                 self.window.show_all()
                 self.window.present()
 
     def get_boost_status(self):
         try:
-            return BOOST_FILE.read_text().strip() == "1"
+            if AMD_BOOSTING_SUPPORTED:
+                return BOOST_FILE_AMD.read_text().strip() == "1"
+            if INTEL_BOOSTING_SUPPORTED:
+                return BOOST_FILE_INTEL.read_text().strip() == "0"
         except Exception as e:
             print(f"Failed to read boost status: {e}")
             return False
 
     def set_boost(self, enable):
-        value = "1" if enable else "0"
+        actual_boost_file = None
+        if AMD_BOOSTING_SUPPORTED:
+            value = "1" if enable else "0"
+            actual_boost_file = BOOST_FILE_AMD
+        if INTEL_BOOSTING_SUPPORTED:
+            value = "0" if enable else "1"
+            actual_boost_file = BOOST_FILE_INTEL
+
         try:
+            # TODO: Replace pkexec if polkit setup breaks in future releases
             subprocess.run(
-                ["pkexec", "tee", str(BOOST_FILE)],
+                ["pkexec", "tee", str(actual_boost_file)],
                 input=value.encode(),
                 check=True,
                 stdout=subprocess.DEVNULL
@@ -150,7 +164,7 @@ class BoostToggleApp(Gtk.Application):
             config_dir.mkdir(parents=True, exist_ok=True)
             STATE_FILE.write_text("1\n" if enabled else "0\n")
         except Exception as e:
-            printf(f"Failed to save state: {e}")
+            print(f"Failed to save state: {e}")
             
 app = BoostToggleApp()
 app.run()

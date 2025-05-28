@@ -2,7 +2,7 @@
 
 ## A simple tray icon tool to toggle CPU boost on supported Linux systems
 
-This tool uses the Linux cpu-freq driver to check and control the current CPU boost status, displaying it via a AppIndicator tray icon that shows whether boost is on or off.
+This tool uses the Linux cpu-freq driver (AMD) or the intel_pstate driver (intel) to check and control the current CPU boost status, displaying it via a AppIndicator tray icon that shows whether boost is on or off.
 
 | Boost State | Tray Icon |
 |-------------|-----------|
@@ -15,7 +15,7 @@ You can toggle boost with a single click plus authentication — privilege eleva
 
 The current boost state is saved to disk and restored on the next boot. 
 
-When the boost status is disabled, CPU frequency is limited to the base clock leading to lower temperatures and saving power. Depending on the CPU this can incur a significant performance hit.
+When the boost status is disabled, CPU frequency is limited to the base clock leading to lower temperatures and saving power. Depending on the CPU this may incur a significant performance hit in some applications.
 
 CPU boost driver (cpu-freq) documentation: <https://www.kernel.org/doc/Documentation/cpu-freq/boost.txt>
 
@@ -29,7 +29,7 @@ sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 \
                  policykit-1
 ```                 
 
-**Note:** depending on your CPU (e.g. Zen 4/5), a relatively recent Kernel version (6.11+) may be required for the boost feature to be available.
+**Note:** depending on your CPU (e.g. Zen 4/5), a relatively recent Kernel version (6.11+) may be required for the boost feature to be available. At the current time this application has only been tested by the author on AMD CPUs (altough intel CPUs are supported since v0.3.0). Systems with both AMD and intel CPUs are currently unsupported.
 
 ## How to use
 
